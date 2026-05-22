@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 World Cup Predictor</title>
+    <style>
+        :root {
+            --primary: #1a56db;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: #111827;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 { text-align: center; color: var(--primary); }
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 10px;
+        }
+        .nav-tabs button {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #6b7280;
+            border-radius: 6px;
+        }
+        .nav-tabs button.active {
+            background-color: var(--primary);
+            color: white;
+        }
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* Matches Page */
+        .group-section {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .match-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .match-row:last-child { border-bottom: none; }
+        .team { flex: 1; text-align: center; font-weight: 500; }
+        .controls {
+            display: flex;
+            gap: 5px;
+        }
+        .btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .btn:hover { background: #f9fafb; }
+        .btn.selected { background: var(--primary); color: white; border-color: var(--primary); }
+
+        /* Tables Page */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+        th { background: #f9fafb; font-weight: 600; }
+        td:first-child { text-align: left; }
+
+        /* Knockout Page */
+        .bracket-round {
+            margin-bottom: 30px;
+        }
+        .ko-match {
+            background: var(--card-bg);
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            border: 1px solid var(--border);
+        }
+        .ko-team {
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .ko-team:hover { background: #f9fafb; }
+        .ko-team.winner { background: var(--primary); color: white; border-color: var(--primary); }
+        #generate-ko-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            display: block;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🏆 2026 World Cup Predictor</h1>
+    
+    <div class="nav-tabs">
+        <button class="active" onclick="switchTab('matches')">1. Group Matches</button>
+        <button onclick="switchTab('tables')">2. Group Tables</button>
+        <button onclick="switchTab('knockout')">3. Knockout Rounds</button>
+    </div>
+
+    <!-- PAGE 1: MATCHES -->
+    <div id="matches" class="page active"></div>
+
+    <!-- PAGE 2: TABLES -->
+    <div id="tables" class="page"></div>
+
+    <!-- PAGE 3: KNOCKOUTS -->
+    <div id="knockout" class="page">
+        <button id="generate-ko-btn" onclick="generateKnockout()">Generate Round of 32 from Tables</button>
+        <div id="bracket-container"></div>
+    </div>
+</div>
+
+<script>
+    // 2026 World Cup Official Groups
+    const groups = {
+        A: ["Mexico", "South Africa", "South Korea", "Czechia"],
+        B: ["Canada", "Bosnia and Herz.", "Qatar", "Switzerland"],
+        C: ["Brazil", "Morocco", "Haiti", "Scotland"],
+        D: ["United States", "Paraguay", "Australia", "Türkiye"],
+        E: ["Germany", "Curaçao", "Côte d'Ivoire", "Ecuador"],
+        F: ["Netherlands", "Japan", "Tunisia", "Sweden"],
+        G: ["Belgium", "Egypt", "Iran", "New Zealand"],
+        H: ["Spain", "Cabo Verde", "Saudi Arabia", "Uruguay"],
+        I: ["France", "Senegal", "Norway", "Iraq"],
+        J: ["Argentina", "Algeria", "Austria", "Jordan"],
+        K: ["Portugal", "Uzbekistan", "Colombia", "Congo DR"],
+        L: ["England", "Croatia", "Ghana", "Panama"]
+    };
+
+    let matches = [];
+    let tableData = {};
+
+    // Generate round-robin match schedule for each group
+    function initMatches() {
+        for (let g in groups) {
+            let t = groups[g];
+            // 6 matches per group
+            let matchups = [
+                [0, 1], [2, 3], 
+                [0, 2], [1, 3], 
+                [0, 3], [1, 2]
+            ];
+            matchups.forEach((m, idx) => {
+                matches.push({
+                    id: `${g}-${idx}`,
+                    group: g,
+                    home: t[m[0]],
+                    away: t[m[1]],
+                    result: null // 'H' (Home Win), 'D' (Draw), 'A' (Away Win)
+                });
+            });
+        }
+        renderMatches();
+        calculateTables();
+    }
+
+    // Render matches to HTML
+    function renderMatches() {
+        const container = document.getElementById('matches');
+        container.innerHTML = '';
+        
+        for (let g in groups) {
+            let groupHtml = `<div class="group-section"><h3>Group ${g}</h3>`;
+            let groupMatches = matches.filter(m => m.group === g);
+            
+            groupMatches.forEach(m => {
+                groupHtml += `
+                    <div class="match-row">
+                        <div class="team">${m.home}</div>
+                        <div class="controls">
+                            <button class="btn ${m.result === 'H' ? 'selected' : ''}" onclick="setResult('${m.id}', 'H')">W</button>
+                            <button class="btn ${m.result === 'D' ? 'selected' : ''}" onclick="setResult('${m.id}', 'D')">D</button>
+                            <button class="btn ${m.result === 'A' ? 'selected' : ''}" onclick="setResult('${m.id}', 'A')">W</button>
+                        </div>
+                        <div class="team">${m.away}</div>
+                    </div>
+                `;
+            });
+            groupHtml += `</div>`;
+            container.innerHTML += groupHtml;
+        }
+    }
+
+    // Set match result and recalculate
+    function setResult(matchId, result) {
+        let match = matches.find(m => m.id === matchId);
+        // Toggle off if clicking the same button
+        match.result = match.result === result ? null : result;
+        renderMatches();
+        calculateTables();
+    }
+
+    // Calculate points and standings
+    function calculateTables() {
+        tableData = {};
+        for (let g in groups) {
+            tableData[g] = groups[g].map(team => ({ name: team, p: 0, w: 0, d: 0, l: 0, pts: 0 }));
+        }
+
+        matches.forEach(m => {
+            if (!m.result) return;
+            let home = tableData[m.group].find(t => t.name === m.home);
+            let away = tableData[m.group].find(t => t.name === m.away);
+            
+            home.p++; away.p++;
+            if (m.result === 'H') { home.w++; home.pts += 3; away.l++; }
+            else if (m.result === 'A') { away.w++; away.pts += 3; home.l++; }
+            else { home.d++; away.d++; home.pts += 1; away.pts += 1; }
+        });
+
+        // Sort by points (simple tie-breaker without goal diff)
+        for (let g in tableData) {
+            tableData[g].sort((a, b) => b.pts - a.pts);
+        }
+        renderTables();
+    }
+
+    // Render tables to HTML
+    function renderTables() {
+        const container = document.getElementById('tables');
+        container.innerHTML = '';
+        
+        for (let g in tableData) {
+            let html = `<div class="group-section"><h3>Group ${g}</h3>
+                <table>
+                    <tr><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr>`;
+            
+            tableData[g].forEach((t, i) => {
+                // Highlight top 2
+                let bg = i < 2 ? 'style="background-color: #f0fdf4;"' : '';
+                html += `<tr ${bg}>
+                    <td><b>${t.name}</b></td>
+                    <td>${t.p}</td><td>${t.w}</td><td>${t.d}</td><td>${t.l}</td>
+                    <td><b>${t.pts}</b></td>
+                </tr>`;
+            });
+            html += `</table></div>`;
+            container.innerHTML += html;
+        }
+    }
+
+    // --- Knockout Logic ---
+    let koRounds = []; // Stores bracket states
+
+    function generateKnockout() {
+        // In 2026: Top 2 from 12 groups + 8 best 3rd places = 32 teams.
+        let advancing = [];
+        let thirds = [];
+
+        for (let g in tableData) {
+            advancing.push(tableData[g][0].name); // 1st
+            advancing.push(tableData[g][1].name); // 2nd
+            thirds.push(tableData[g][2]);         // 3rd
+        }
+
+        // Sort 3rd places by points and take top 8
+        thirds.sort((a, b) => b.pts - a.pts);
+        for(let i=0; i<8; i++) {
+            advancing.push(thirds[i].name);
+        }
+
+        // Shuffle simply for bracket placement
+        advancing.sort(() => Math.random() - 0.5);
+
+        let r32 = [];
+        for (let i = 0; i < 32; i += 2) {
+            r32.push({ id: `R32-${i/2}`, t1: advancing[i], t2: advancing[i+1], winner: null });
+        }
+        
+        koRounds = [r32];
+        renderKnockout();
+        document.getElementById('generate-ko-btn').style.display = 'none';
+    }
+
+    function selectKoWinner(roundIndex, matchIndex, team) {
+        koRounds[roundIndex][matchIndex].winner = team;
+        
+        // Rebuild subsequent rounds
+        let currentRound = koRounds[roundIndex];
+        let nextRoundRoster = [];
+        
+        for (let i = 0; i < currentRound.length; i += 2) {
+            let w1 = currentRound[i].winner || "TBD";
+            if (currentRound[i+1]) {
+                let w2 = currentRound[i+1].winner || "TBD";
+                nextRoundRoster.push({ id: `R${roundIndex+1}-${i/2}`, t1: w1, t2: w2, winner: null });
+            }
+        }
+
+        if (nextRoundRoster.length > 0) {
+            koRounds[roundIndex + 1] = nextRoundRoster;
+            // Clear future rounds if a prior selection is changed
+            koRounds.splice(roundIndex + 2); 
+        }
+
+        renderKnockout();
+    }
+
+    function renderKnockout() {
+        const container = document.getElementById('bracket-container');
+        container.innerHTML = '';
+        
+        const roundNames = ["Round of 32", "Round of 16", "Quarter-Finals", "Semi-Finals", "Final", "Champion"];
+
+        koRounds.forEach((round, rIndex) => {
+            let html = `<div class="bracket-round">
+                <h2 style="border-bottom:2px solid var(--primary); padding-bottom:5px;">${roundNames[rIndex]}</h2>`;
+            
+            if (round.length === 0) return;
+
+            round.forEach((m, mIndex) => {
+                html += `
+                <div class="ko-match">
+                    <div class="ko-team ${m.winner === m.t1 ? 'winner' : ''}" 
+                         onclick="selectKoWinner(${rIndex}, ${mIndex}, '${m.t1}')">${m.t1}</div>
+                    <div class="ko-team ${m.winner === m.t2 ? 'winner' : ''}" 
+                         onclick="selectKoWinner(${rIndex}, ${mIndex}, '${m.t2}')">${m.t2}</div>
+                </div>`;
+            });
+            html += `</div>`;
+            container.innerHTML += html;
+        });
+
+        // Show Champion if final is complete
+        let finalMatch = koRounds[4];
+        if (finalMatch && finalMatch[0] && finalMatch[0].winner && finalMatch[0].winner !== "TBD") {
+            container.innerHTML += `
+            <div class="bracket-round">
+                <h2 style="border-bottom:2px solid var(--primary); padding-bottom:5px;">🏆 Champion</h2>
+                <div style="font-size: 24px; font-weight: bold; text-align: center; padding: 20px; background: #f0fdf4; border-radius: 8px;">
+                    ${finalMatch[0].winner}
+                </div>
+            </div>`;
+        }
+    }
+
+    // Simple tab switcher
+    function switchTab(tabId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    // Initialize the app
+    initMatches();
+</script>
+
+</body>
+</html>
